@@ -1,11 +1,32 @@
 import logging
-
+import itertools
 
 class SymbolMeta(type):
     def __getattr__(cls, name):
         if name.startswith("__"):
             super(SymbolMeta, type).__getattr__(name)
         return cls(name=name)
+
+def flatmap(func, iterable):
+    return list(itertools.chain.from_iterable(map(func, iterable)))
+
+class FlatMap(object):
+    def __repr__(self):
+        return "(%s * %s)" % (self.left, self.right)
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def __call__(self, obj):
+        ls = self.left(obj)
+        return flatmap(self.right, ls)
+
+    def __add__(self, other):
+        return DictCombiner(self, other)
+
+    def __mul__(self, other):
+        return FlatMap(self, other)
 
 
 class KResult(dict):
@@ -42,7 +63,7 @@ class k(object):
 
     def __repr__(self):
         chain = self._chain()
-        names = [k_.name for k_ in chain]
+        names = [str(k_.name) for k_ in chain]
         return "k<%s>" % ".".join(names)
 
     def __init__(self, name=None, prev=None):
@@ -51,6 +72,9 @@ class k(object):
 
     def __getattr__(self, name):
         return k(name=name, prev=self)
+
+    def __getitem__(self, idx):
+        return k(name=idx, prev=self)
 
     def __call__(self, obj):
         if self.prev:
@@ -61,16 +85,12 @@ class k(object):
         if res is not None:
             if self.name == "_":
               return res
-            attr_or_none = None
-            if hasattr(res, 'get'):
-              try:
-                attr_or_none = res.get(self.name)
-              except AttributeError:
-                pass
-            if attr_or_none is None:
-              attr_or_none = getattr(res, self.name, None)
+            attr_or_none = getattr(res, str(self.name), None)
             if attr_or_none is None and hasattr(res, '__getitem__'):
-                attr_or_none = res.get(self.name, None)
+                try:
+                    attr_or_none = res.__getitem__(self.name)
+                except IndexError, KeyError:
+                    pass
             return attr_or_none
         else:
             return res
@@ -83,8 +103,11 @@ class k(object):
 
     def _path(self):
         chain = self._chain()
-        names = [k_.name for k_ in chain]
+        names = [str(k_.name) for k_ in chain]
         return "%s" % "_".join(names)
 
     def __add__(self, other):
         return DictCombiner(self, other)
+
+    def __mul__(self, other):
+        return FlatMap(self, other)
