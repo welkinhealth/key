@@ -87,3 +87,11 @@ def test_flatten():
   o.children = [a, b]
   assert k.children.children.foo(o) == [['bar', 'bar'], ['bar', 'bar']]
   assert k.children.children(flatten=True).foo(o) == ['bar', 'bar', 'bar', 'bar']
+
+def test_welkin_get():
+  class Foo(object):
+    def get(self, name):
+      return name
+    foo = 'bar'
+  o = Foo()
+  assert k.foo(o) == 'foo'

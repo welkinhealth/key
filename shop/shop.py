@@ -70,7 +70,17 @@ class k(object):
   def try_hard_to_get(self, obj):
     if self.name == "_":
       return obj
-    attr_or_none = getattr(obj, str(self.name), self.default)
+    attr_or_none = self.default
+    print self.default
+    if hasattr(obj, 'get'):		
+      try:		
+        attr_or_none = obj.get(self.name)		
+        if attr_or_none is None:
+          attr_or_none = self.default
+      except AttributeError:		
+        pass
+    if attr_or_none is self.default:
+      attr_or_none = getattr(obj, str(self.name), self.default)
     if attr_or_none is self.default and hasattr(obj, '__getitem__'):
       try:
         attr_or_none = obj.__getitem__(self.name)
@@ -89,13 +99,12 @@ class k(object):
     if self.flatten is None:
       self.flatten = flatten
 
-    default = kwargs.pop('default', None)
-    if self.default is None:
-      self.default = default
-
     if len(args) == 0:
       return self
     elif len(args) == 1:
+      default = kwargs.pop('default', None)
+      if self.default is None:
+        self.default = default
       obj = args[0]
       if self.prev:
         res = self.prev(obj)
