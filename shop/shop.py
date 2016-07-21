@@ -3,40 +3,26 @@ import itertools
 
 
 class SymbolMeta(type):
+
   def __getattr__(cls, name):
     if name.startswith("__"):
       super(SymbolMeta, type).__getattr__(name)
     return cls(name=name)
 
-
-def flatmap(func, iterable):
-  return list(itertools.chain.from_iterable(map(func, iterable)))
-
-
-class FlatMap(object):
-  def __repr__(self):
-    return "(%s * %s)" % (self.left, self.right)
-
-  def __init__(self, left, right):
-    self.left = left
-    self.right = right
-
-  def __call__(self, *args, **kwargs):
-    ls = self.left(*args, **kwargs)
-    return flatmap(self.right, ls)
-
-  def __add__(self, other):
-    return DictCombiner(self, other)
-
-  def __mul__(self, other):
-    return FlatMap(self, other)
+  def __getitem__(cls, idx):
+    return cls(name=idx)
 
 
 class KResult(dict):
   pass
 
 
+def flatmap(func, iterable):
+  return list(itertools.chain.from_iterable(map(func, iterable)))
+
+
 class DictCombiner(object):
+
   def __repr__(self):
     return "(%s + %s)" % (self.left, self.right)
 
@@ -44,13 +30,13 @@ class DictCombiner(object):
     self.left = left
     self.right = right
 
-  def __call__(self, *args, **kwargs):
+  def __call__(self, obj):
     def merge(child, self_result):
-      child_result = child(*args, **kwargs)
+      child_result = child(obj)
       if isinstance(child_result, KResult):
-        return dict(self_result.items() + child_result.items())
+        return KResult(self_result.items() + child_result.items())
       else:
-        return dict(self_result.items() + [(child._path(), child_result)])
+        return KResult(self_result.items() + [(child._path(), child_result)])
 
     self_result = KResult()
     self_result = merge(self.left, self_result)
@@ -72,6 +58,8 @@ class k(object):
   def __init__(self, name=None, prev=None):
     self.name = name
     self.prev = prev
+    self.flatten = None
+    self.default = None
 
   def __getattr__(self, name):
     return k(name=name, prev=self)
@@ -79,24 +67,44 @@ class k(object):
   def __getitem__(self, idx):
     return k(name=idx, prev=self)
 
-  def __call__(self, obj, default=None):
-    if self.prev:
-      res = self.prev(obj)
-    else:
-      res = obj
-    logging.debug(str(self), res)
-    if res is not None:
-      if self.name == "_":
+  def try_hard_to_get(self, obj):
+    if self.name == "_":
+      return obj
+    attr_or_none = getattr(obj, str(self.name), self.default)
+    if attr_or_none is self.default and hasattr(obj, '__getitem__'):
+      try:
+        attr_or_none = obj.__getitem__(self.name)
+      except (IndexError, KeyError):
+        return self.default
+      except TypeError:
+        if isinstance(obj, list):
+          if self.flatten is True:
+            return flatmap(self.try_hard_to_get, obj)
+          else:
+            return map(self.try_hard_to_get, obj)
+    return attr_or_none
+
+  def __call__(self, *args, **kwargs):
+    flatten = kwargs.pop('flatten', None)
+    if self.flatten is None:
+      self.flatten = flatten
+
+    default = kwargs.pop('default', None)
+    if self.default is None:
+      self.default = default
+
+    if len(args) == 0:
+      return self
+    elif len(args) == 1:
+      obj = args[0]
+      if self.prev:
+        res = self.prev(obj)
+      else:
+        res = obj
+      if res is not None:
+        return self.try_hard_to_get(res)
+      else:
         return res
-      attr_or_none = getattr(res, str(self.name), None)
-      if attr_or_none is None and hasattr(res, '__getitem__'):
-        try:
-          attr_or_none = res.__getitem__(self.name)
-        except (IndexError, KeyError):
-          pass
-      return default if attr_or_none is None else attr_or_none
-    else:
-      return default
 
   def _chain(self):
     if self.prev:
@@ -112,5 +120,3 @@ class k(object):
   def __add__(self, other):
     return DictCombiner(self, other)
 
-  def __mul__(self, other):
-    return FlatMap(self, other)
