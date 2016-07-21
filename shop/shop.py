@@ -71,7 +71,6 @@ class k(object):
     if self.name == "_":
       return obj
     attr_or_none = self.default
-    print self.default
     if hasattr(obj, 'get'):		
       try:		
         attr_or_none = obj.get(self.name)		
