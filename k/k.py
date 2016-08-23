@@ -1,4 +1,3 @@
-import logging
 import itertools
 
 
@@ -21,6 +20,11 @@ def flatmap(func, iterable):
   return list(itertools.chain.from_iterable(map(func, iterable)))
 
 
+def zipkeys(d):
+  zipped = zip(*d.values())
+  return [dict(zip(d.keys(), z)) for z in zipped]
+
+
 class DictCombiner(object):
 
   def __repr__(self):
@@ -29,6 +33,7 @@ class DictCombiner(object):
   def __init__(self, left, right):
     self.left = left
     self.right = right
+    self.combine = False
 
   def __call__(self, obj):
     def merge(child, self_result):
@@ -41,6 +46,9 @@ class DictCombiner(object):
     self_result = KResult()
     self_result = merge(self.left, self_result)
     self_result = merge(self.right, self_result)
+    if self.left.combine and self.right.combine:
+      self.combine = True
+      self_result = zipkeys(self_result)
     return self_result
 
   def __add__(self, other):
@@ -60,6 +68,7 @@ class k(object):
     self.prev = prev
     self.flatten = None
     self.default = None
+    self.combine = False
 
   def __getattr__(self, name):
     return k(name=name, prev=self)
@@ -87,6 +96,7 @@ class k(object):
         return self.default
       except TypeError:
         if isinstance(obj, list):
+          self.combine = True
           if self.flatten is True:
             return flatmap(self.try_hard_to_get, obj)
           else:
@@ -124,6 +134,9 @@ class k(object):
     chain = self._chain()
     names = [str(k_.name) for k_ in chain]
     return "%s" % "_".join(names)
+
+  def _combine(self):
+    return self.combine or (self.prev and self.prev._combine())
 
   def __add__(self, other):
     return DictCombiner(self, other)

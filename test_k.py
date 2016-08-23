@@ -1,4 +1,4 @@
-from shop import k
+import k
 
 
 class Obj(dict):
@@ -65,6 +65,40 @@ def test_addition_and_nesting():
   o.foo = 'bar'
   o.child = c
   assert (k.foo + k.child.foo)(o) == {'foo': 'bar', 'child_foo': 'bar'}
+
+
+def test_deep_addition_and_nesting():
+  a, b, c = Obj(), Obj(), Obj()
+  a.foo = 'bar'
+  b.foo = 'bar'
+  c.foo = 'baz'
+  a.bar = 'qux'
+  b.bar = 'quux'
+  c.bar = 'quux'
+  ls = [a, b, c]
+
+  assert (k.foo + k.bar)(ls) == [{
+    "foo": "bar",
+    "bar": "qux",
+  }, {
+    "foo": "bar",
+    "bar": "quux",
+  }, {
+    "foo": "baz",
+    "bar": "quux",
+  }]
+
+
+def test_not_combining_random_props():
+  a, b, c, d = Obj(), Obj(), Obj(), Obj()
+
+  a.foo = [b, c]
+  a.bar = [c, d]
+
+  assert (k.foo + k.bar)(a) == {
+    "foo": [b, c],
+    "bar": [c, d]
+  }
 
 
 def test_nested_list():
